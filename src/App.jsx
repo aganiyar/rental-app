@@ -14,7 +14,7 @@ const firebaseConfig = {
   appId: "1:488241985144:web:a8dba6b02ee78787471f8d",
   measurementId: "G-F6J2YRNYJM"
 };
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'rental-tracker';
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'rental-tracker-2.0';
 
 // --- Helper Components ---
 const Modal = ({ children, onClose, size = '2xl' }) => (
@@ -92,7 +92,7 @@ export default function App() {
                  setDoc(configDocRef, { friends: friendsList }, { merge: true });
              }
              setFriends(friendsList);
-        }, (err) => { console.error(err); setError("Failed to load friend list.") });
+        }, (err) => { console.error(err); setError("Failed to load friend list. Check Firestore rules.") });
 
         const expensesColRef = collection(db, 'artifacts', appId, 'public', 'data', 'expenses');
         const unsubscribeExpenses = onSnapshot(expensesColRef, (snap) => setExpenses(snap.docs.map(d => ({...d.data(), id: d.id}))), (err) => { console.error(err); setError("Failed to fetch expenses.")});
@@ -173,43 +173,70 @@ export default function App() {
     // --- Event Handlers ---
     const handleAddFriend = async () => {
         if (!db || !newFriendName.trim()) return;
-        const newFriendsList = [...friends, newFriendName.trim()];
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'main'), { friends: newFriendsList }, { merge: true });
-        setNewFriendName('');
+        try {
+            const newFriendsList = [...friends, newFriendName.trim()];
+            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'main'), { friends: newFriendsList }, { merge: true });
+            setNewFriendName('');
+        } catch (e) {
+            console.error("Failed to add friend:", e);
+            setError(`Failed to add friend: ${e.message}`);
+        }
     };
     
     const handleRemoveFriend = async (friendToRemove) => {
-        const newFriendsList = friends.filter(f => f !== friendToRemove);
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'main'), { friends: newFriendsList }, { merge: true });
+        try {
+            const newFriendsList = friends.filter(f => f !== friendToRemove);
+            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'main'), { friends: newFriendsList }, { merge: true });
+        } catch (e) {
+             console.error("Failed to remove friend:", e);
+            setError(`Failed to remove friend: ${e.message}`);
+        }
     };
 
-    const handleDeleteExpense = async (id) => await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'expenses', id));
+    const handleDeleteExpense = async (id) => {
+        try {
+            await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'expenses', id));
+        } catch (e) {
+            console.error("Failed to delete expense:", e);
+            setError(`Failed to delete expense: ${e.message}`);
+        }
+    }
     
     const handleSaveExpense = async (expenseData, isRecurring, dayOfMonth) => {
         if (!db) return;
-        const colPath = isRecurring ? 'recurring' : 'expenses';
-        const fullColPath = collection(db, 'artifacts', appId, 'public', 'data', colPath);
-        let dataToSave = {...expenseData};
-        if(isRecurring) {
-            dataToSave.dayOfMonth = dayOfMonth;
-            dataToSave.lastPosted = Timestamp.fromDate(new Date(1970, 0, 1)); 
-        } else {
-             dataToSave.date = Timestamp.fromDate(new Date(dataToSave.date));
+        try {
+            const colPath = isRecurring ? 'recurring' : 'expenses';
+            const fullColPath = collection(db, 'artifacts', appId, 'public', 'data', colPath);
+            let dataToSave = {...expenseData};
+            if(isRecurring) {
+                dataToSave.dayOfMonth = dayOfMonth;
+                dataToSave.lastPosted = Timestamp.fromDate(new Date(1970, 0, 1)); 
+            } else {
+                 dataToSave.date = Timestamp.fromDate(new Date(dataToSave.date));
+            }
+            if (editingExpense) { 
+                const expenseDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'expenses', editingExpense.id);
+                await updateDoc(expenseDocRef, dataToSave);
+            } else {
+                await addDoc(fullColPath, dataToSave);
+            }
+            setIsExpenseModalOpen(false); setEditingExpense(null);
+        } catch(e) {
+            console.error("Failed to save expense:", e);
+            setError(`Failed to save expense: ${e.message}`);
         }
-        if (editingExpense) { 
-            const expenseDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'expenses', editingExpense.id);
-            await updateDoc(expenseDocRef, dataToSave);
-        } else {
-            await addDoc(fullColPath, dataToSave);
-        }
-        setIsExpenseModalOpen(false); setEditingExpense(null);
     };
 
     const handleSaveSettlement = async ({ from, to, amount, date }) => {
         if(!db || !from || !to || !amount) return;
-        const settlementsColRef = collection(db, 'artifacts', appId, 'public', 'data', 'settlements');
-        await addDoc(settlementsColRef, {from, to, amount: parseFloat(amount), date: Timestamp.fromDate(new Date(date)) });
-        setIsSettleModalOpen(false);
+        try {
+            const settlementsColRef = collection(db, 'artifacts', appId, 'public', 'data', 'settlements');
+            await addDoc(settlementsColRef, {from, to, amount: parseFloat(amount), date: Timestamp.fromDate(new Date(date)) });
+            setIsSettleModalOpen(false);
+        } catch(e) {
+            console.error("Failed to save settlement:", e);
+            setError(`Failed to save settlement: ${e.message}`);
+        }
     };
     
     // --- Render Helpers ---
@@ -675,4 +702,3 @@ function ExpenseFormModal({ friends, expense, onSave, onClose }) {
         </Modal>
     );
 }
-
