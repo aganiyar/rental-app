@@ -14,7 +14,7 @@ const firebaseConfig = {
   appId: "1:488241985144:web:a8dba6b02ee78787471f8d",
   measurementId: "G-F6J2YRNYJM"
 };
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-rental-tracker';
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'rental-tracker';
 
 // --- Helper Components ---
 const Modal = ({ children, onClose, size = '2xl' }) => (
@@ -675,3 +675,4 @@ function ExpenseFormModal({ friends, expense, onSave, onClose }) {
         </Modal>
     );
 }
+
